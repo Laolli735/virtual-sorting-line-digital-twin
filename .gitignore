@@ -1,0 +1,23 @@
+﻿# Python
+venv/
+__pycache__/
+*.py[cod]
+*.class
+
+# OPC UA certificates & private keys (generated locally)
+*.der
+*.pem
+edge-gateway/make_cert.py
+edge-gateway/connect_only.py
+
+# Environment & IDE
+.env
+.vscode/
+.idea/
+
+# CODESYS temporary & user-specific build files
+plc/*.opt
+plc/*~*
+plc/*.prec*
+plc/*.Device.*
+plc/*.bootinfo
