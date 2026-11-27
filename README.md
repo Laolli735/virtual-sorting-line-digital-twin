@@ -10,6 +10,14 @@ Teollisuusautomaation ja IIoT-arkkitehtuurin kokonaisvaltainen referenssitoteutu
 
 Koko järjestelmä on täysin laitteistoriippumaton: se toimii joko mukana tulevalla Python-pohjaisella virtuaali-PLC:llä (Dockerissa tai lokaalisti) tai suoraan Windowsin **CODESYS Control Win V3** -ajoympäristöä vasten.
 
+### Käyttöliittymä & Analytiikka (Kuvakaappaukset)
+
+**Web-SCADA / HMI & Three.js 3D Digital Twin:**
+![Web-SCADA 3D Digital Twin](docs/scada-3d-twin.png)
+
+**Grafana — Reaaliaikainen OEE & tuotantoanalytiikka:**
+![Grafana OEE Dashboard](docs/grafana-oee.png)
+
 ### Järjestelmäarkkitehtuuri
 
 ```text

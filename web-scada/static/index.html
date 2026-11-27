@@ -140,11 +140,17 @@
     }
     #twin-canvas-container {
       width: 100%;
-      height: 360px;
+      height: 380px;
       border-radius: 6px;
       overflow: hidden;
       background: #0b1120;
       position: relative;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    #twin-canvas-container:active {
+      cursor: grabbing;
     }
     #sensor-toast {
       position: absolute;
@@ -157,6 +163,31 @@
       font-size: 0.8rem;
       color: var(--blue);
       pointer-events: none;
+      z-index: 10;
+    }
+    #cam-hint {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      pointer-events: none;
+      z-index: 10;
+    }
+    #btn-reset-cam {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.75rem;
+      background: rgba(30, 41, 59, 0.9);
+      color: #f8fafc;
+      border: 1px solid #334155;
+      z-index: 10;
     }
 
     h2 { font-size: 1.15rem; margin-bottom: 0.75rem; }
@@ -231,6 +262,8 @@
     </div>
     <div id="twin-canvas-container">
       <div id="sensor-toast">Inductive Sensor: STANDBY</div>
+      <button id="btn-reset-cam" onclick="resetCamera()">&#8634; Reset Camera</button>
+      <div id="cam-hint">Drag to rotate &bull; Scroll to zoom</div>
     </div>
   </section>
 
@@ -263,16 +296,69 @@
     const sensorToast = document.getElementById("sensor-toast");
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b1120);
-    scene.fog = new THREE.Fog(0x0b1120, 14, 32);
+    scene.fog = new THREE.Fog(0x0b1120, 14, 34);
 
     const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
-    camera.position.set(5.5, 6.2, 8.8);
-    camera.lookAt(0.5, 0.4, -0.5);
-
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
+
+    // Interactive Orbit & Zoom Camera Controls
+    const camTarget = new THREE.Vector3(0.5, 0.4, -0.5);
+    let camRadius = 11.8;
+    let camTheta = 0.56;
+    let camPhi = 0.98;
+    let isDragging = false;
+    let prevX = 0;
+    let prevY = 0;
+
+    function updateCameraPosition() {
+      camera.position.x = camTarget.x + camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+      camera.position.y = camTarget.y + camRadius * Math.cos(camPhi);
+      camera.position.z = camTarget.z + camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+      camera.lookAt(camTarget);
+    }
+    updateCameraPosition();
+
+    function resetCamera() {
+      camRadius = 11.8;
+      camTheta = 0.56;
+      camPhi = 0.98;
+      updateCameraPosition();
+    }
+
+    container.addEventListener("pointerdown", (e) => {
+      if (e.target.id === "btn-reset-cam") return;
+      isDragging = true;
+      prevX = e.clientX;
+      prevY = e.clientY;
+      container.setPointerCapture(e.pointerId);
+    });
+
+    container.addEventListener("pointermove", (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevX;
+      const dy = e.clientY - prevY;
+      prevX = e.clientX;
+      prevY = e.clientY;
+      camTheta -= dx * 0.008;
+      camPhi = Math.max(0.22, Math.min(Math.PI / 2 - 0.06, camPhi - dy * 0.008));
+      updateCameraPosition();
+    });
+
+    container.addEventListener("pointerup", (e) => {
+      isDragging = false;
+      if (container.hasPointerCapture(e.pointerId)) {
+        container.releasePointerCapture(e.pointerId);
+      }
+    });
+
+    container.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      camRadius = Math.max(4.5, Math.min(22, camRadius + e.deltaY * 0.008));
+      updateCameraPosition();
+    }, { passive: false });
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
@@ -310,7 +396,7 @@
       return group;
     }
 
-    // Main Conveyor (Z: +5 -> -1.5), Plastic Branch B (Z: -1.5 -> -6.5), Metal Branch A (X: 0 -> -5.2 at Z = -1.5)
+    // Main Conveyor, Plastic Branch B, Metal Branch A
     createConveyor(1.4, 7.0, 0, 0.6, 1.8, 0);
     createConveyor(1.4, 4.8, 0, 0.6, -4.1, 0);
     createConveyor(1.3, 4.8, -3.1, 0.6, -1.5, Math.PI / 2);
@@ -353,7 +439,6 @@
     createBin(-6.2, -1.5, 0x64748b); // Metal Bin (Branch A)
     createBin(0, -7.2, 0x0284c7);    // Plastic Bin (Branch B)
 
-    // Spawn Item Function ('METAL' -> Branch A, 'PLASTIC' -> Branch B)
     function spawnWorkpiece(type) {
       const isMetal = type === "METAL";
       const geom = isMetal
@@ -384,7 +469,6 @@
       const isRunning = plcState === 10;
       const speed = isRunning ? 3.2 : 0;
 
-      // Beacon state color
       if (plcState === 99) {
         const blink = Math.sin(Date.now() * 0.015) > 0;
         sensorBeaconMat.color.setHex(0xef4444);
@@ -399,16 +483,13 @@
         sensorBeaconMat.emissiveIntensity = isRunning ? 0.6 : 0.1;
       }
 
-      // Smooth diverter rotation
       diverterPivot.rotation.y += (diverterTargetAngle - diverterPivot.rotation.y) * Math.min(1, dt * 10);
 
-      // Update workpieces
       for (let i = activeItems.length - 1; i >= 0; i--) {
         const item = activeItems[i];
         if (item.stage === "INFEED") {
           item.mesh.position.z -= speed * dt;
 
-          // Trigger sensor at Z <= 0.2
           if (!item.scanned && item.mesh.position.z <= 0.2) {
             item.scanned = true;
             sensorGlow = 0.45;
@@ -423,7 +504,6 @@
             }
           }
 
-          // Reach diverter junction at Z <= -1.5
           if (item.mesh.position.z <= -1.5) {
             item.mesh.position.z = -1.5;
             item.stage = item.type === "METAL" ? "BRANCH_A" : "BRANCH_B";
