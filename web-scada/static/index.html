@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sorting Line 01 â€” Web-SCADA / HMI</title>
+  <title>Sorting Line 01 &mdash; Web-SCADA / 3D Digital Twin</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -98,7 +99,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 1rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
     }
     .card {
       background: var(--card);
@@ -108,6 +109,55 @@
     }
     .card-label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .card-value { font-size: 2.2rem; font-weight: 700; margin-top: 0.4rem; }
+
+    .twin-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 2rem;
+    }
+    .twin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .twin-legend {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    #twin-canvas-container {
+      width: 100%;
+      height: 360px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #0b1120;
+      position: relative;
+    }
+    #sensor-toast {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--blue);
+      pointer-events: none;
+    }
 
     h2 { font-size: 1.15rem; margin-bottom: 0.75rem; }
     table {
@@ -132,8 +182,8 @@
 <body>
   <header>
     <div>
-      <h1>SORTING LINE 01 â€” OPERATOR SCADA / HMI</h1>
-      <div class="subtitle">Bidirectional OPC UA Control &amp; Alarm Management</div>
+      <h1>SORTING LINE 01 &mdash; OPERATOR SCADA / HMI</h1>
+      <div class="subtitle">Bidirectional OPC UA Control, 3D Digital Twin &amp; Alarm Management</div>
     </div>
     <div class="header-actions">
       <a href="http://localhost:3000/d/sorting-line-oee" target="_blank" rel="noopener noreferrer" class="btn-grafana">&#128202; Grafana Analytics &#8599;</a>
@@ -158,16 +208,29 @@
       <div class="card-value" id="kpi-total">0</div>
     </div>
     <div class="card">
-      <div class="card-label">Branch A</div>
+      <div class="card-label">Branch A (Metal)</div>
       <div class="card-value" id="kpi-a">0</div>
     </div>
     <div class="card">
-      <div class="card-label">Branch B</div>
+      <div class="card-label">Branch B (Plastic)</div>
       <div class="card-value" id="kpi-b">0</div>
     </div>
     <div class="card">
       <div class="card-label">OEE Availability</div>
       <div class="card-value" id="kpi-oee">0.0%</div>
+    </div>
+  </section>
+
+  <section class="twin-section">
+    <div class="twin-header">
+      <h2>3D Digital Twin &mdash; Optical &amp; Inductive Material Sorting</h2>
+      <div class="twin-legend">
+        <span><span class="legend-dot" style="background:#cbd5e1;"></span>Metal &rarr; Branch A (Left Chute)</span>
+        <span><span class="legend-dot" style="background:#38bdf8;"></span>Plastic &rarr; Branch B (Straight Chute)</span>
+      </div>
+    </div>
+    <div id="twin-canvas-container">
+      <div id="sensor-toast">Inductive Sensor: STANDBY</div>
     </div>
   </section>
 
@@ -188,6 +251,210 @@
   </section>
 
   <script>
+    // --- 3D DIGITAL TWIN (THREE.JS) ---
+    let plcState = 0;
+    let lastSortedA = null;
+    let lastSortedB = null;
+    const activeItems = [];
+    let diverterTargetAngle = 0;
+    let sensorGlow = 0;
+
+    const container = document.getElementById("twin-canvas-container");
+    const sensorToast = document.getElementById("sensor-toast");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1120);
+    scene.fog = new THREE.Fog(0x0b1120, 14, 32);
+
+    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(5.5, 6.2, 8.8);
+    camera.lookAt(0.5, 0.4, -0.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+    dirLight.position.set(6, 12, 8);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // Factory Floor Grid
+    const grid = new THREE.GridHelper(24, 24, 0x334155, 0x1e293b);
+    scene.add(grid);
+
+    // Conveyor Helper
+    function createConveyor(width, length, x, y, z, rotY = 0) {
+      const group = new THREE.Group();
+      const belt = new THREE.Mesh(
+        new THREE.BoxGeometry(width, 0.18, length),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
+      );
+      belt.position.y = y;
+      belt.receiveShadow = true;
+      group.add(belt);
+
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.6, roughness: 0.3 });
+      [-width / 2 - 0.06, width / 2 + 0.06].forEach(rx => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, length), railMat);
+        rail.position.set(rx, y + 0.08, 0);
+        group.add(rail);
+      });
+
+      group.position.set(x, 0, z);
+      group.rotation.y = rotY;
+      scene.add(group);
+      return group;
+    }
+
+    // Main Conveyor (Z: +5 -> -1.5), Plastic Branch B (Z: -1.5 -> -6.5), Metal Branch A (X: 0 -> -5.2 at Z = -1.5)
+    createConveyor(1.4, 7.0, 0, 0.6, 1.8, 0);
+    createConveyor(1.4, 4.8, 0, 0.6, -4.1, 0);
+    createConveyor(1.3, 4.8, -3.1, 0.6, -1.5, Math.PI / 2);
+
+    // Inductive Sensor Portal at Z = 0.2
+    const portalMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.2 });
+    const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.4, 0.18), portalMat);
+    leftPost.position.set(-0.85, 1.2, 0.2);
+    const rightPost = leftPost.clone();
+    rightPost.position.x = 0.85;
+    const topBar = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.18, 0.24), portalMat);
+    topBar.position.set(0, 1.9, 0.2);
+    scene.add(leftPost, rightPost, topBar);
+
+    const sensorBeaconMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.4 });
+    const sensorBeacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), sensorBeaconMat);
+    sensorBeacon.position.set(0, 2.08, 0.2);
+    scene.add(sensorBeacon);
+
+    // Pneumatic Diverter Arm at Z = -1.5
+    const diverterPivot = new THREE.Group();
+    diverterPivot.position.set(0.75, 0.85, -1.5);
+    const armMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.26, 1.45),
+      new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.4, roughness: 0.3 })
+    );
+    armMesh.position.set(0, 0, -0.65);
+    diverterPivot.add(armMesh);
+    scene.add(diverterPivot);
+
+    // Collection Bins
+    function createBin(x, z, colorHex) {
+      const bin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 0.75, 1.8),
+        new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.5, transparent: true, opacity: 0.85 })
+      );
+      bin.position.set(x, 0.375, z);
+      scene.add(bin);
+    }
+    createBin(-6.2, -1.5, 0x64748b); // Metal Bin (Branch A)
+    createBin(0, -7.2, 0x0284c7);    // Plastic Bin (Branch B)
+
+    // Spawn Item Function ('METAL' -> Branch A, 'PLASTIC' -> Branch B)
+    function spawnWorkpiece(type) {
+      const isMetal = type === "METAL";
+      const geom = isMetal
+        ? new THREE.CylinderGeometry(0.32, 0.32, 0.28, 24)
+        : new THREE.BoxGeometry(0.55, 0.34, 0.55);
+      const mat = isMetal
+        ? new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.15 })
+        : new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.1, roughness: 0.4 });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(0, 0.86, 4.8);
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      activeItems.push({
+        mesh,
+        type,
+        stage: "INFEED",
+        scanned: false
+      });
+    }
+
+    // Animation Loop
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const isRunning = plcState === 10;
+      const speed = isRunning ? 3.2 : 0;
+
+      // Beacon state color
+      if (plcState === 99) {
+        const blink = Math.sin(Date.now() * 0.015) > 0;
+        sensorBeaconMat.color.setHex(0xef4444);
+        sensorBeaconMat.emissive.setHex(blink ? 0xdc2626 : 0x450a0a);
+        sensorBeaconMat.emissiveIntensity = blink ? 1.5 : 0.2;
+      } else if (sensorGlow > 0) {
+        sensorGlow -= dt;
+        sensorBeaconMat.emissiveIntensity = 1.6;
+      } else {
+        sensorBeaconMat.color.setHex(isRunning ? 0x22c55e : 0x64748b);
+        sensorBeaconMat.emissive.setHex(isRunning ? 0x16a34a : 0x1e293b);
+        sensorBeaconMat.emissiveIntensity = isRunning ? 0.6 : 0.1;
+      }
+
+      // Smooth diverter rotation
+      diverterPivot.rotation.y += (diverterTargetAngle - diverterPivot.rotation.y) * Math.min(1, dt * 10);
+
+      // Update workpieces
+      for (let i = activeItems.length - 1; i >= 0; i--) {
+        const item = activeItems[i];
+        if (item.stage === "INFEED") {
+          item.mesh.position.z -= speed * dt;
+
+          // Trigger sensor at Z <= 0.2
+          if (!item.scanned && item.mesh.position.z <= 0.2) {
+            item.scanned = true;
+            sensorGlow = 0.45;
+            if (item.type === "METAL") {
+              diverterTargetAngle = 0.68;
+              sensorToast.textContent = "Inductive Sensor: METAL DETECTED -> Diverting to Branch A";
+              sensorToast.style.color = "#f8fafc";
+            } else {
+              diverterTargetAngle = 0.0;
+              sensorToast.textContent = "Optical Sensor: PLASTIC DETECTED -> Routing to Branch B";
+              sensorToast.style.color = "#38bdf8";
+            }
+          }
+
+          // Reach diverter junction at Z <= -1.5
+          if (item.mesh.position.z <= -1.5) {
+            item.mesh.position.z = -1.5;
+            item.stage = item.type === "METAL" ? "BRANCH_A" : "BRANCH_B";
+          }
+        } else if (item.stage === "BRANCH_A") {
+          item.mesh.position.x -= speed * dt;
+          if (item.mesh.position.x <= -5.8) {
+            scene.remove(item.mesh);
+            activeItems.splice(i, 1);
+          }
+        } else if (item.stage === "BRANCH_B") {
+          item.mesh.position.z -= speed * dt;
+          if (item.mesh.position.z <= -6.8) {
+            scene.remove(item.mesh);
+            activeItems.splice(i, 1);
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener("resize", () => {
+      if (!container.clientWidth) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // --- SCADA COMMANDS & TELEMETRY SYNC ---
     async function sendCmd(command) {
       const fb = document.getElementById("feedback");
       try {
@@ -218,13 +485,35 @@
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
+        plcState = data.state ?? 0;
+
         const badge = document.getElementById("state-badge");
         badge.textContent = `${data.state_label} (${data.state})`;
         badge.className = "badge" + (data.state === 10 ? " run" : data.state === 99 ? " fault" : "");
 
+        const curA = data.sorted_a ?? 0;
+        const curB = data.sorted_b ?? 0;
+
+        if (lastSortedA !== null && curA > lastSortedA) {
+          spawnWorkpiece("METAL");
+        }
+        if (lastSortedB !== null && curB > lastSortedB) {
+          spawnWorkpiece("PLASTIC");
+        }
+        lastSortedA = curA;
+        lastSortedB = curB;
+
+        if (plcState === 99) {
+          sensorToast.textContent = "FAULT INTERLOCK ACTIVE - CONVEYOR HALTED";
+          sensorToast.style.color = "#f87171";
+        } else if (plcState === 0) {
+          sensorToast.textContent = "Inductive Sensor: STANDBY (Line Stopped)";
+          sensorToast.style.color = "#94a3b8";
+        }
+
         document.getElementById("kpi-total").textContent = data.total_count ?? 0;
-        document.getElementById("kpi-a").textContent = data.sorted_a ?? 0;
-        document.getElementById("kpi-b").textContent = data.sorted_b ?? 0;
+        document.getElementById("kpi-a").textContent = curA;
+        document.getElementById("kpi-b").textContent = curB;
         document.getElementById("kpi-oee").textContent = `${Number(data.oee_availability ?? 0).toFixed(1)}%`;
 
         const tbody = document.getElementById("alarms-body");
@@ -235,7 +524,7 @@
             : `<span class="status-ack">Ack by ${a.acknowledged_by || "Operator"}</span>`;
           const actionHtml = a.active
             ? `<button class="btn-ack" onclick="ackAlarm(${a.id})">Acknowledge</button>`
-            : `â€”`;
+            : `&mdash;`;
           return `<tr>
             <td>${t}</td>
             <td><strong>${a.alarm_code}</strong></td>
