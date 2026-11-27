@@ -30,23 +30,30 @@
     th { background: #0f172a; color: #94a3b8; }
     .ack-btn { background: #3b82f6; color: #fff; padding: 6px 12px; font-size: 0.8rem; }
     #feedback { margin-bottom: 16px; color: #38bdf8; min-height: 20px; font-size: 0.9rem; }
+      .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-grafana {
+      background: #1e293b; color: #38bdf8; border: 1px solid #334155;
+      padding: 0.5rem 0.9rem; border-radius: 6px; text-decoration: none;
+      font-weight: 600; font-size: 0.9rem; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-grafana:hover { background: #334155; border-color: #38bdf8; }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <div>
-        <h1>SORTING LINE 01 — OPERATOR SCADA / HMI</h1>
+        <h1>SORTING LINE 01 â€” OPERATOR SCADA / HMI</h1>
         <small style="color:#94a3b8">Bidirectional OPC UA Control &amp; Alarm Management</small>
       </div>
       <div id="stateBadge" class="badge state-IDLE">OFFLINE</div>
     </header>
 
     <div class="controls">
-      <button class="btn-start" onclick="sendCmd('START')">▶ START LINE</button>
-      <button class="btn-stop" onclick="sendCmd('STOP')">■ STOP LINE</button>
-      <button class="btn-reset" onclick="sendCmd('RESET')">↻ RESET FAULT</button>
-      <button class="btn-fault" onclick="sendCmd('FAULT_TEST')">⚠ SIMULATE FAULT</button>
+      <button class="btn-start" onclick="sendCmd('START')">â–¶ START LINE</button>
+      <button class="btn-stop" onclick="sendCmd('STOP')">â–  STOP LINE</button>
+      <button class="btn-reset" onclick="sendCmd('RESET')">â†» RESET FAULT</button>
+      <button class="btn-fault" onclick="sendCmd('FAULT_TEST')">âš  SIMULATE FAULT</button>
     </div>
     <div id="feedback"></div>
 
@@ -115,7 +122,7 @@
             <td><strong>${a.alarm_code}</strong></td>
             <td>${a.message}</td>
             <td>${a.active ? '<span style="color:#f87171;font-weight:bold;">ACTIVE (UNACK)</span>' : `Ack by ${a.acknowledged_by}`}</td>
-            <td>${a.active ? `<button class="ack-btn" onclick="ackAlarm(${a.id})">Acknowledge</button>` : '—'}</td>
+            <td>${a.active ? `<button class="ack-btn" onclick="ackAlarm(${a.id})">Acknowledge</button>` : 'â€”'}</td>
           </tr>
         `).join('');
       } catch (e) {
