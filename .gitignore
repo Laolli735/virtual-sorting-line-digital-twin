@@ -21,3 +21,7 @@ plc/*~*
 plc/*.prec*
 plc/*.Device.*
 plc/*.bootinfo
+
+edge-gateway/archive/
+
+edge-gateway/archive/
