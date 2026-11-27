@@ -1,10 +1,10 @@
 import asyncio
 import datetime
 import ipaddress
-import socket
 import os
 import random
 import secrets
+import socket
 from pathlib import Path
 
 from asyncua import Server, ua
@@ -44,8 +44,8 @@ def ensure_server_certificates() -> None:
         .issuer_name(issuer)
         .public_key(key.public_key())
         .serial_number(serial)
-        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
-        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(
             x509.KeyUsage(
