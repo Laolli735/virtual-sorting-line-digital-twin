@@ -1,65 +1,134 @@
-# Virtual Sorting Line — Industrial IIoT & Digital Twin Pipeline
+# Virtual Sorting Line — Industrial IoT (IIoT) & Digital Twin Portfolio
 
-An end-to-end Industrial Internet of Things (IIoT) and Digital Twin portfolio project demonstrating secure PLC-to-Cloud telemetry, real-time OEE calculation, and bidirectional Web-SCADA operator control.
+[Suomeksi](#-suomeksi) | [In English](#-in-english)
 
-## System Architecture
+---
+
+## 🇫🇮 Suomeksi
+
+Teollisuusautomaation ja IIoT-arkkitehtuurin kokonaisvaltainen referenssitoteutus, joka yhdistää **IEC 61131-3 -logiikan**, **Zero-Trust OPC UA -tietoturvan**, **reaaliaikaisen telemetrian**, **Web-SCADA / HMI -käyttöliittymän** sekä **Grafana-analytiikan**.
+
+Koko järjestelmä on täysin laitteistoriippumaton: se toimii joko mukana tulevalla Python-pohjaisella virtuaali-PLC:llä (Dockerissa tai lokaalisti) tai suoraan Windowsin **CODESYS Control Win V3** -ajoympäristöä vasten.
+
+### Järjestelmäarkkitehtuuri
 
 ```text
-+-----------------------+       OPC UA (Basic256Sha256)       +------------------------+
-|  CODESYS Control Win  | <=================================> |   Python Edge Gateway  |
-|  (IEC 61131-3 ST PLC) |      SignAndEncrypt + X.509v3       |   (opcua_to_db.py)     |
-+-----------------------+                                     +------------------------+
-            ^                                                              |
-            | OPC UA Write                                                 | SQL Insert
-            | (Start/Stop/Reset/Fault)                                     v
-+-----------------------+       REST API / Alarm Ack          +------------------------+
-|   Web-SCADA / HMI     | <---------------------------------> |  PostgreSQL Database   |
-| (FastAPI + HTML5/JS)  |                                     | (Metrics & Alarms DB)  |
-+-----------------------+                                     +------------------------+
-                                                                           |
-                                                                           v
-                                                              +------------------------+
-                                                              |   Grafana Dashboard    |
-                                                              | (Real-time OEE & KPIs) |
-                                                              +------------------------+
-Key Features & Engineering Highlights
-IEC 61131-3 PLC Control Logic (plc-logic/): Structured Text (ST) state machine (IDLE, RUN, FAULT) for an automated optical sorting conveyor with emergency stop interlocks, height-based pneumatic pusher timing, and branch counters.
++-----------------------------------+       +-----------------------------------+
+|  Virtual PLC / CODESYS (Port 4841)|       |     Web-SCADA / HMI (Port 8000)   |
+|  - IEC 61131-3 State Machine      |<----->|     - FastAPI + Vanilla JS UI     |
+|  - Optical Sorting Simulation     | OPCUA |     - Bidirectional PLC Control   |
+|  - X.509v3 SignAndEncrypt         |       |     - Alarm Acknowledgment        |
++-----------------------------------+       +-----------------------------------+
+                 |                                            |
+                 | OPC UA (Basic256Sha256)                    | SQL / REST
+                 v                                            v
++-----------------------------------+       +-----------------------------------+
+|     Edge Gateway (asyncua)        |------>|      PostgreSQL 16 (Port 5432)    |
+|     - Telemetry & OEE Calculation |  SQL  |      - production_metrics         |
+|     - Fault Event Detection       |       |      - scada_alarms               |
++-----------------------------------+       +-----------------------------------+
+                                                              |
+                                                              v
+                                            +-----------------------------------+
+                                            |     Grafana 11.3 (Port 3000)      |
+                                            |     - Auto-Provisioned Dashboard  |
+                                            |     - Real-Time OEE & KPIs        |
+                                            +-----------------------------------+
+Keskeiset ominaisuudet
+Kaksisuuntainen OPC UA -ohjaus (Basic256Sha256 + SignAndEncrypt): Kaikki ohjaus- ja telemetrialiikenne on allekirjoitettu ja salattu X.509v3-sertifikaateilla.
 
-Zero-Trust OPC UA Security: Encrypted and signed communication (Basic256Sha256 / SignAndEncrypt) between CODESYS Control Win V3 and Python clients using custom X.509v3 certificates (urn:python:edgegateway) and explicit certificate trust management.
+Laitteistoriippumaton PLC-simulaattori (plc-simulator/): Emuloi CODESYS Control Win V3:n nimiavaruutta (ns=4), tilakonetta (IDLE, RUN, FAULT) ja lajitteluprosessia.
 
-Python Edge Gateway (edge-gateway/): Asynchronous asyncua telemetry collector that samples PLC tags, computes real-time OEE Availability, reconciles production counts, and persists time-series records into PostgreSQL.
+Web-SCADA / HMI (web-scada/): FastAPI-pohjainen operaattorikäyttöliittymä linjan käynnistykseen, pysäytykseen, vikasimulointiin ja hälytysten kuittaukseen.
 
-Bidirectional Web-SCADA / HMI (web-scada/): FastAPI backend and browser-based operator panel supporting live KPI monitoring, remote PLC commands (START, STOP, RESET, FAULT_TEST), and persistent alarm acknowledgement workflows.
+Automatisoitu Grafana-analytiikka (grafana/provisioning/): PostgreSQL-tietolähde ja OEE/tuotantograafit latautuvat automaattisesti käynnistyksen yhteydessä.
 
-Containerized Data & Visualization Stack: Docker Compose setup running PostgreSQL and Grafana for historical trend analysis.
+CI/CD-laadunvalvonta: GitHub Actions ajaa automaattisesti ruff-koodianalyysin ja pytest-yksikkötestit jokaisen muutoksen yhteydessä.
 
-Automated CI/CD Quality Gate (.github/workflows/): Every push and pull request is validated via GitHub Actions using ruff (linting/formatting) and pytest (unit and API endpoint testing).
+Nopea käynnistys (Docker Compose)
+Luo OPC UA -asiakassertifikaatti (jos ei vielä luotu):
 
-Project Structure
+Bash
+python edge-gateway/generate_certs.py
+Käynnistä koko 5 kontin järjestelmä yhdellä komennolla:
+
+Bash
+docker compose up -d --build
+Avaa käyttöliittymät selaimessa:
+
+Web-SCADA / HMI: http://localhost:8000
+
+Grafana Analytics: http://localhost:3000/d/sorting-line-oee (tunnukset: admin / admin)
+
+Käyttö aidolla CODESYS-logiikalla (valinnainen)
+Jos ajat logiikkaa Windowsin CODESYS Control Win V3 -ympäristössä (portti 4840), vaihda ympäristömuuttuja OPCUA_URL=opc.tcp://host.docker.internal:4840 ja tuo client_cert.der CODESYSin luotettujen sertifikaattien listalle (Trusted Certificates).
+
+🇬🇧 In English
+An end-to-end Industrial IoT (IIoT) and Digital Twin reference implementation combining IEC 61131-3 PLC logic, Zero-Trust OPC UA security, real-time telemetry ingestion, a bidirectional Web-SCADA / HMI, and auto-provisioned Grafana analytics.
+
+The entire stack is hardware-independent: it runs out of the box using the included Python Virtual PLC simulator (containerized or standalone) or connects directly to a CODESYS Control Win V3 runtime.
+
+System Architecture
 Plaintext
-├── .github/workflows/   # GitHub Actions CI pipeline (Ruff + Pytest)
-├── edge-gateway/        # OPC UA telemetry collector, metrics processor & Docker Compose
-├── plc-logic/           # CODESYS Structured Text (ST) source code
-├── tests/               # Automated unit and FastAPI integration tests
-├── web-scada/           # FastAPI Web-SCADA server and HTML5/JS HMI frontend
-└── requirements.txt     # Python dependencies
-Quick Start
-1. Start Database & Grafana Containers
-Bash
-docker compose -f edge-gateway/docker-compose.yml up -d
-2. Run PLC & Edge Gateway Collector
-Open the PLC project in CODESYS Development System, log in to CODESYS Control Win V3, and set the program to RUN.
++-----------------------------------+       +-----------------------------------+
+|  Virtual PLC / CODESYS (Port 4841)|       |     Web-SCADA / HMI (Port 8000)   |
+|  - IEC 61131-3 State Machine      |<----->|     - FastAPI + Vanilla JS UI     |
+|  - Optical Sorting Simulation     | OPCUA |     - Bidirectional PLC Control   |
+|  - X.509v3 SignAndEncrypt         |       |     - Alarm Acknowledgment        |
++-----------------------------------+       +-----------------------------------+
+                 |                                            |
+                 | OPC UA (Basic256Sha256)                    | SQL / REST
+                 v                                            v
++-----------------------------------+       +-----------------------------------+
+|     Edge Gateway (asyncua)        |------>|      PostgreSQL 16 (Port 5432)    |
+|     - Telemetry & OEE Calculation |  SQL  |      - production_metrics         |
+|     - Fault Event Detection       |       |      - scada_alarms               |
++-----------------------------------+       +-----------------------------------+
+                                                              |
+                                                              v
+                                            +-----------------------------------+
+                                            |     Grafana 11.3 (Port 3000)      |
+                                            |     - Auto-Provisioned Dashboard  |
+                                            |     - Real-Time OEE & KPIs        |
+                                            +-----------------------------------+
+Key Features
+Bidirectional Secure OPC UA (Basic256Sha256 + SignAndEncrypt): All telemetry and control commands are signed and encrypted using X.509v3 certificates.
 
-Start the telemetry bridge:
+Hardware-Independent PLC Simulator (plc-simulator/): Replicates CODESYS Control Win V3 tag structures (ns=4), state machine (IDLE, RUN, FAULT), and optical sorting physics.
+
+Web-SCADA / HMI (web-scada/): FastAPI operator interface supporting line start/stop, fault injection/reset, real-time KPIs, and operator alarm acknowledgment.
+
+Auto-Provisioned Grafana Analytics (grafana/provisioning/): Pre-configured PostgreSQL datasource and real-time OEE & sorting telemetry dashboard.
+
+Automated CI/CD: GitHub Actions pipeline enforcing ruff linting and pytest unit test coverage across simulator, telemetry processing, and SCADA endpoints.
+
+Quick Start (Docker Compose)
+Generate OPC UA client X.509v3 certificates (if not already present):
 
 Bash
-python edge-gateway/opcua_to_db.py
-3. Launch Web-SCADA Operator HMI
-Bash
-uvicorn web-scada.app:app --reload --port 8000
-Open http://localhost:8000 in your browser to control the sorting line and manage alarms.
+python edge-gateway/generate_certs.py
+Build and start all 5 containers:
 
-Running Quality Checks Locally
 Bash
-ruff check .
-pytest -v
+docker compose up -d --build
+Open the web interfaces:
+
+Web-SCADA / HMI: http://localhost:8000
+
+Grafana Analytics: http://localhost:3000/d/sorting-line-oee (default credentials: admin / admin)
+
+Running Against CODESYS Control Win V3 (Optional)
+To connect to a live CODESYS runtime on Windows (port 4840), set OPCUA_URL=opc.tcp://host.docker.internal:4840 and move client_cert.der into the CODESYS Trusted Certificates store.
+
+Repository Structure
+plc/ — IEC 61131-3 Structured Text (PLC_PRG) and CODESYS project archive
+
+plc-simulator/ — Standalone Python OPC UA PLC simulator (sim_plc.py)
+
+edge-gateway/ — asyncua telemetry bridge, OEE processor, and database schema (init.sql)
+
+web-scada/ — FastAPI backend and operator HMI frontend
+
+grafana/ — Automated Grafana datasource and OEE dashboard provisioning
+
+tests/ — pytest unit test suite
