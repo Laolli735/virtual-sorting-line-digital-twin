@@ -289,6 +289,7 @@
     let lastSortedA = null;
     let lastSortedB = null;
     const activeItems = [];
+    const spawnQueue = [];
     let diverterTargetAngle = 0;
     let sensorGlow = 0;
 
@@ -485,10 +486,25 @@
 
       diverterPivot.rotation.y += (diverterTargetAngle - diverterPivot.rotation.y) * Math.min(1, dt * 10);
 
+      // Vapauta seuraava kappale jonosta vasta, kun syöttöpää (z = 4.8) on vapaa
+      if (isRunning && spawnQueue.length > 0) {
+        const canSpawn = activeItems.every(it => it.stage !== "INFEED" || it.mesh.position.z < 3.45);
+        if (canSpawn) {
+          spawnWorkpiece(spawnQueue.shift());
+        }
+      }
+
       for (let i = activeItems.length - 1; i >= 0; i--) {
         const item = activeItems[i];
         if (item.stage === "INFEED") {
-          item.mesh.position.z -= speed * dt;
+          let nextZ = item.mesh.position.z - speed * dt;
+          // Estä kappaleita ajamasta edellä kulkevan sisään
+          for (const other of activeItems) {
+            if (other !== item && other.stage === "INFEED" && other.mesh.position.z < item.mesh.position.z) {
+              nextZ = Math.max(nextZ, other.mesh.position.z + 1.2);
+            }
+          }
+          item.mesh.position.z = nextZ;
 
           if (!item.scanned && item.mesh.position.z <= 0.2) {
             item.scanned = true;
@@ -575,10 +591,10 @@
         const curB = data.sorted_b ?? 0;
 
         if (lastSortedA !== null && curA > lastSortedA) {
-          spawnWorkpiece("METAL");
+          for (let i = 0; i < curA - lastSortedA; i++) spawnQueue.push("METAL");
         }
         if (lastSortedB !== null && curB > lastSortedB) {
-          spawnWorkpiece("PLASTIC");
+          for (let i = 0; i < curB - lastSortedB; i++) spawnQueue.push("PLASTIC");
         }
         lastSortedA = curA;
         lastSortedB = curB;
