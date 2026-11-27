@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web-SCADA | Virtual Sorting Line HMI</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+    .container { max-width: 1050px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 1.4rem; letter-spacing: 0.5px; }
+    .badge { padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 1.1rem; }
+    .state-RUN { background: #15803d; color: #fff; }
+    .state-IDLE { background: #475569; color: #fff; }
+    .state-FAULT { background: #b91c1c; color: #fff; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.6; } }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; }
+    .card-label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; }
+    .card-val { font-size: 2rem; font-weight: 700; margin-top: 6px; }
+    .controls { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    button { border: none; border-radius: 6px; padding: 12px 20px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
+    .btn-start { background: #22c55e; color: #052e16; }
+    .btn-stop { background: #eab308; color: #422006; }
+    .btn-reset { background: #38bdf8; color: #082f49; }
+    .btn-fault { background: #ef4444; color: #fff; margin-left: auto; }
+    button:hover { filter: brightness(1.1); }
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #334155; font-size: 0.9rem; }
+    th { background: #0f172a; color: #94a3b8; }
+    .ack-btn { background: #3b82f6; color: #fff; padding: 6px 12px; font-size: 0.8rem; }
+    #feedback { margin-bottom: 16px; color: #38bdf8; min-height: 20px; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>SORTING LINE 01 — OPERATOR SCADA / HMI</h1>
+        <small style="color:#94a3b8">Bidirectional OPC UA Control &amp; Alarm Management</small>
+      </div>
+      <div id="stateBadge" class="badge state-IDLE">OFFLINE</div>
+    </header>
+
+    <div class="controls">
+      <button class="btn-start" onclick="sendCmd('START')">▶ START LINE</button>
+      <button class="btn-stop" onclick="sendCmd('STOP')">■ STOP LINE</button>
+      <button class="btn-reset" onclick="sendCmd('RESET')">↻ RESET FAULT</button>
+      <button class="btn-fault" onclick="sendCmd('FAULT_TEST')">⚠ SIMULATE FAULT</button>
+    </div>
+    <div id="feedback"></div>
+
+    <div class="grid">
+      <div class="card"><div class="card-label">Total Inspected</div><div id="valTotal" class="card-val">0</div></div>
+      <div class="card"><div class="card-label">Branch A</div><div id="valA" class="card-val">0</div></div>
+      <div class="card"><div class="card-label">Branch B</div><div id="valB" class="card-val">0</div></div>
+      <div class="card"><div class="card-label">OEE Availability</div><div id="valOee" class="card-val">0.0%</div></div>
+    </div>
+
+    <h2 style="font-size:1.1rem; margin-bottom:10px;">Active &amp; Historical Alarms</h2>
+    <table>
+      <thead>
+        <tr><th>Time (UTC)</th><th>Code</th><th>Description</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody id="alarmRows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function sendCmd(command) {
+      const fb = document.getElementById('feedback');
+      fb.textContent = `Sending OPC UA command: ${command}...`;
+      try {
+        const res = await fetch('/api/command', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ command })
+        });
+        const data = await res.json();
+        fb.textContent = res.ok ? `Command ${command} executed (${data.tag})` : `Error: ${data.detail}`;
+        setTimeout(refreshStatus, 500);
+      } catch (err) {
+        fb.textContent = `Connection error: ${err}`;
+      }
+    }
+
+    async function ackAlarm(id) {
+      await fetch(`/api/alarms/${id}/ack`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ operator: 'Shift_Lead_1' })
+      });
+      refreshStatus();
+    }
+
+    async function refreshStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (!data.connected) return;
+
+        const badge = document.getElementById('stateBadge');
+        badge.textContent = `${data.state_label} (${data.state})`;
+        badge.className = `badge state-${data.state_label}`;
+
+        document.getElementById('valTotal').textContent = data.total_count;
+        document.getElementById('valA').textContent = data.sorted_a;
+        document.getElementById('valB').textContent = data.sorted_b;
+        document.getElementById('valOee').textContent = `${data.oee_availability.toFixed(1)}%`;
+
+        const tbody = document.getElementById('alarmRows');
+        tbody.innerHTML = data.alarms.map(a => `
+          <tr>
+            <td>${new Date(a.created_at).toLocaleTimeString()}</td>
+            <td><strong>${a.alarm_code}</strong></td>
+            <td>${a.message}</td>
+            <td>${a.active ? '<span style="color:#f87171;font-weight:bold;">ACTIVE (UNACK)</span>' : `Ack by ${a.acknowledged_by}`}</td>
+            <td>${a.active ? `<button class="ack-btn" onclick="ackAlarm(${a.id})">Acknowledge</button>` : '—'}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    setInterval(refreshStatus, 1500);
+    refreshStatus();
+  </script>
+</body>
+</html>
