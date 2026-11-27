@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sorting Line 01 — Web-SCADA / HMI</title>
+  <title>Sorting Line 01 â€” Web-SCADA / HMI</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -132,11 +132,11 @@
 <body>
   <header>
     <div>
-      <h1>SORTING LINE 01 — OPERATOR SCADA / HMI</h1>
+      <h1>SORTING LINE 01 â€” OPERATOR SCADA / HMI</h1>
       <div class="subtitle">Bidirectional OPC UA Control &amp; Alarm Management</div>
     </div>
     <div class="header-actions">
-      <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer" class="btn-grafana">&#128202; Grafana Analytics &#8599;</a>
+      <a href="http://localhost:3000/d/sorting-line-oee" target="_blank" rel="noopener noreferrer" class="btn-grafana">&#128202; Grafana Analytics &#8599;</a>
       <div id="state-badge" class="badge">IDLE (0)</div>
     </div>
   </header>
@@ -235,7 +235,7 @@
             : `<span class="status-ack">Ack by ${a.acknowledged_by || "Operator"}</span>`;
           const actionHtml = a.active
             ? `<button class="btn-ack" onclick="ackAlarm(${a.id})">Acknowledge</button>`
-            : `—`;
+            : `â€”`;
           return `<tr>
             <td>${t}</td>
             <td><strong>${a.alarm_code}</strong></td>

@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: PostgreSQL-IIoT
+    type: postgres
+    uid: postgres-iiot
+    access: proxy
+    url: postgres:5432
+    database: iiot_metrics
+    user: iiot_user
+    secureJsonData:
+      password: iiot_password
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+    isDefault: true

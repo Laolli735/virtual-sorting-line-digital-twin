@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sorting-line-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-iiot_metrics}
+      POSTGRES_USER: ${POSTGRES_USER:-iiot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iiot_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./edge-gateway/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iiot_user} -d ${POSTGRES_DB:-iiot_metrics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: sorting-line-grafana
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+  plc-simulator:
+    build: .
+    container_name: sorting-line-plc-sim
+    restart: unless-stopped
+    command: python -u plc-simulator/sim_plc.py
+    environment:
+      SIM_OPCUA_URL: opc.tcp://0.0.0.0:4841
+    ports:
+      - "4841:4841"
+
+  edge-gateway:
+    build: .
+    container_name: sorting-line-edge-gateway
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      plc-simulator:
+        condition: service_started
+    command: python -u edge-gateway/opcua_to_db.py
+    environment:
+      OPCUA_URL: opc.tcp://plc-simulator:4841
+      DB_HOST: postgres
+      DB_NAME: ${POSTGRES_DB:-iiot_metrics}
+      DB_USER: ${POSTGRES_USER:-iiot_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-iiot_password}
+
+  web-scada:
+    build: .
+    container_name: sorting-line-web-scada
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      plc-simulator:
+        condition: service_started
+    command: uvicorn web-scada.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      OPCUA_URL: opc.tcp://plc-simulator:4841
+      DB_HOST: postgres
+      DB_NAME: ${POSTGRES_DB:-iiot_metrics}
+      DB_USER: ${POSTGRES_USER:-iiot_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-iiot_password}
+
+volumes:
+  pgdata:
+  grafanadata:

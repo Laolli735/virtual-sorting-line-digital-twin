@@ -1,0 +1,37 @@
+{
+  "uid": "sorting-line-oee",
+  "title": "Sorting Line 01 â€” OEE & Production Telemetry",
+  "tags": ["iiot", "plc", "oee"],
+  "timezone": "browser",
+  "refresh": "2s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "OEE Availability (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "postgres-iiot" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS \"time\", oee_availability AS \"OEE %\" FROM production_metrics WHERE $__timeFilter(timestamp) ORDER BY timestamp",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent" } }
+    },
+    {
+      "id": 2,
+      "title": "Sorted Items (Branch A vs Branch B)",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "postgres-iiot" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS \"time\", total_count AS \"Total\", sorted_a AS \"Branch A\", sorted_b AS \"Branch B\" FROM production_metrics WHERE $__timeFilter(timestamp) ORDER BY timestamp",
+          "format": "time_series"
+        }
+      ]
+    }
+  ]
+}
