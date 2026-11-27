@@ -11,8 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(ROOT_DIR / ".env")
-load_dotenv(ROOT_DIR / "edge-gateway" / ".env")
+load_dotenv(ROOT_DIR / ".env", override=False)
+load_dotenv(ROOT_DIR / "edge-gateway" / ".env", override=False)
 
 app = FastAPI(title="Virtual Sorting Line Web-SCADA")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

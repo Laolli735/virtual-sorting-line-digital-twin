@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -9,7 +9,7 @@ import time
 import psycopg2
 from asyncua import Client
 
-OPCUA_URL = "opc.tcp://127.0.0.1:4840"
+OPCUA_URL = os.getenv("OPCUA_URL", "opc.tcp://127.0.0.1:4840")
 DEVICE_NAME = "CODESYS Control Win V3 x64"
 PREFIX = f"ns=4;s=|var|{DEVICE_NAME}.Application.PLC_PRG"
 
